@@ -27,9 +27,22 @@ public class UpdateCatalogItemEndpointTest
         var client = ProgramTest.NewClient;
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
+        // Arrange: snapshot the seed item (id 1) before the rejected request.
+        var before = await GetItemAsync(client, 1);
+
         var response = await client.PutAsync("api/catalog-items", GetUpdateJson(1));
 
         Assert.AreEqual(HttpStatusCode.Forbidden, response.StatusCode);
+
+        // Assert: the rejected update must leave the item unchanged.
+        var after = await GetItemAsync(client, 1);
+
+        Assert.AreEqual(before.CatalogItem.Id, after.CatalogItem.Id);
+        Assert.AreEqual(before.CatalogItem.Name, after.CatalogItem.Name);
+        Assert.AreEqual(before.CatalogItem.Description, after.CatalogItem.Description);
+        Assert.AreEqual(before.CatalogItem.Price, after.CatalogItem.Price);
+        Assert.AreEqual(before.CatalogItem.CatalogBrandId, after.CatalogItem.CatalogBrandId);
+        Assert.AreEqual(before.CatalogItem.CatalogTypeId, after.CatalogItem.CatalogTypeId);
     }
 
     [TestMethod]
@@ -100,6 +113,14 @@ public class UpdateCatalogItemEndpointTest
         var model = stringResponse.FromJson<CreateCatalogItemResponse>();
 
         return model!.CatalogItem.Id;
+    }
+
+    private async Task<GetByIdCatalogItemResponse> GetItemAsync(HttpClient client, int id)
+    {
+        var response = await client.GetAsync($"api/catalog-items/{id}");
+        response.EnsureSuccessStatusCode();
+        var stringResponse = await response.Content.ReadAsStringAsync();
+        return stringResponse.FromJson<GetByIdCatalogItemResponse>()!;
     }
 
     private StringContent GetUpdateJson(int id)
