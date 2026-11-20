@@ -1,6 +1,6 @@
 using Microsoft.eShopWeb;
 using Microsoft.eShopWeb.PublicApi.CatalogItemEndpoints;
-using Microsoft.eShopWeb.Web.ViewModels;
+using System;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System.Collections.Generic;
 using System.Linq;
@@ -21,9 +21,31 @@ public class CatalogItemListPagedEndpoint
         var response = await client.GetAsync("/api/catalog-items?pageSize=10");
         response.EnsureSuccessStatusCode();
         var stringResponse = await response.Content.ReadAsStringAsync();
-        var model = stringResponse.FromJson<CatalogIndexViewModel>();
+        var model = stringResponse.FromJson<ListPagedCatalogItemResponse>();
 
-        Assert.AreEqual(10, model!.CatalogItems.Count());
+        Assert.IsNotNull(model);
+        Assert.AreEqual(10, model!.CatalogItems.Count);
+        Assert.AreEqual(10, model.CatalogItems.Select(i => i.Id).Distinct().Count(), "Page must not repeat items.");
+
+        // The paging query has no ordering, so compare by id against the full catalog instead of by position.
+        var allResponse = await client.GetAsync("/api/catalog-items");
+        allResponse.EnsureSuccessStatusCode();
+        var all = (await allResponse.Content.ReadAsStringAsync()).FromJson<ListPagedCatalogItemResponse>()!;
+        var allById = all.CatalogItems.ToDictionary(i => i.Id);
+        foreach (var item in model.CatalogItems)
+        {
+            Assert.IsTrue(allById.TryGetValue(item.Id, out var expected), $"Item {item.Id} is not in the catalog.");
+            Assert.AreEqual(expected!.Name, item.Name);
+            Assert.AreEqual(expected.Price, item.Price);
+            Assert.AreEqual(expected.CatalogBrandId, item.CatalogBrandId);
+            Assert.AreEqual(expected.CatalogTypeId, item.CatalogTypeId);
+            Assert.AreEqual(expected.PictureUri, item.PictureUri);
+        }
+        Assert.AreEqual((int)Math.Ceiling(all.CatalogItems.Count / 10m), model.PageCount);
+
+        // Picture URIs must be composed to real URLs, not left with the seed placeholder.
+        Assert.IsTrue(model.CatalogItems.All(i => !string.IsNullOrEmpty(i.PictureUri)
+            && !i.PictureUri.Contains("catalogbaseurltobereplaced")));
     }
 
     [TestMethod]

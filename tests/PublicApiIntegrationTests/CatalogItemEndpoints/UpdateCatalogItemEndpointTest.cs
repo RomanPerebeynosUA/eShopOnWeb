@@ -1,4 +1,3 @@
-using BlazorShared.Models;
 using Microsoft.eShopWeb;
 using Microsoft.eShopWeb.PublicApi.CatalogItemEndpoints;
 using Microsoft.VisualStudio.TestTools.UnitTesting;

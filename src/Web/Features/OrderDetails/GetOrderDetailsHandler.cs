@@ -21,7 +21,8 @@ public class GetOrderDetailsHandler : IRequestHandler<GetOrderDetails, OrderDeta
         var spec = new OrderWithItemsByIdSpec(request.OrderId);
         var order = await _orderRepository.FirstOrDefaultAsync(spec, cancellationToken);
 
-        if (order == null)
+        // Only the buyer may see an order; anyone else gets the same result as a missing order.
+        if (order == null || order.BuyerId != request.UserName)
         {
             return null;
         }
