@@ -1,6 +1,8 @@
-﻿using BlazorShared.Models;
+using BlazorShared.Models;
 using Microsoft.eShopWeb;
+using Microsoft.eShopWeb.PublicApi.CatalogItemEndpoints;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -23,13 +25,23 @@ public class CreateCatalogItemEndpointTest
     [TestMethod]
     public async Task ReturnsNotAuthorizedGivenNormalUserToken()
     {
-        var jsonContent = GetValidNewItemJson();
+        const string forbiddenItemName = "forbidden create should not persist";
+        var jsonContent = GetValidNewItemJson(forbiddenItemName);
         var token = ApiTokenHelper.GetNormalUserToken();
         var client = ProgramTest.NewClient;
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         var response = await client.PostAsync("api/catalog-items", jsonContent);
 
         Assert.AreEqual(HttpStatusCode.Forbidden, response.StatusCode);
+
+        // Follow-up read: the rejected request must not have created an item.
+        var readClient = ProgramTest.NewClient;
+        var listResponse = await readClient.GetAsync("api/catalog-items");
+        listResponse.EnsureSuccessStatusCode();
+        var stringResponse = await listResponse.Content.ReadAsStringAsync();
+        var model = stringResponse.FromJson<ListPagedCatalogItemResponse>();
+
+        Assert.IsFalse(model!.CatalogItems.Any(i => i.Name == forbiddenItemName));
     }
 
     [TestMethod]
@@ -51,14 +63,14 @@ public class CreateCatalogItemEndpointTest
         Assert.AreEqual(_testPrice, model.CatalogItem.Price);
     }
 
-    private StringContent GetValidNewItemJson()
+    private StringContent GetValidNewItemJson(string? name = null)
     {
         var request = new CreateCatalogItemRequest()
         {
             CatalogBrandId = _testBrandId,
             CatalogTypeId = _testTypeId,
             Description = _testDescription,
-            Name = _testName,
+            Name = name ?? _testName,
             Price = _testPrice
         };
         var jsonContent = new StringContent(JsonSerializer.Serialize(request), Encoding.UTF8, "application/json");
