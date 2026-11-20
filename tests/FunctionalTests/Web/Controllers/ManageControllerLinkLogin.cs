@@ -1,4 +1,5 @@
 using System.Net;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Xunit;
 
@@ -7,8 +8,11 @@ namespace Microsoft.eShopWeb.FunctionalTests.Web.Controllers;
 [Collection("Sequential")]
 public class ManageControllerLinkLogin : IClassFixture<TestApplication>
 {
+    private readonly TestApplication _factory;
+
     public ManageControllerLinkLogin(TestApplication factory)
     {
+        _factory = factory;
         Client = factory.CreateClient(new WebApplicationFactoryClientOptions
         {
             AllowAutoRedirect = false
@@ -39,16 +43,15 @@ public class ManageControllerLinkLogin : IClassFixture<TestApplication>
     }
 
     [Fact]
-    public async Task RejectsPostWithoutAntiForgeryToken()
+    public async Task RejectsAuthenticatedPostWithoutAntiForgeryTokenAndAddsNoLogin()
     {
-        var keyValues = new List<KeyValuePair<string, string>>
-        {
-            new KeyValuePair<string, string>("provider", "Google")
-        };
-        var formContent = new FormUrlEncodedContent(keyValues);
+        var email = await WebTestUsers.CreateAndLoginAsync(_factory, Client);
+        var formContent = new FormUrlEncodedContent(new Dictionary<string, string> { ["provider"] = "Google" });
 
         var response = await Client.PostAsync("/manage/link-login", formContent);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var logins = await WebTestUsers.WithUserManagerAsync(_factory, (um, user) => um.GetLoginsAsync(user), email);
+        Assert.Empty(logins);
     }
 }
