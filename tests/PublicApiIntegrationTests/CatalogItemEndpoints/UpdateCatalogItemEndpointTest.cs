@@ -1,6 +1,7 @@
 using Microsoft.eShopWeb;
 using Microsoft.eShopWeb.PublicApi.CatalogItemEndpoints;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -51,9 +52,48 @@ public class UpdateCatalogItemEndpointTest
         var client = ProgramTest.NewClient;
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
 
-        var response = await client.PutAsync("api/catalog-items", GetUpdateJson(0));
+        var unknownId = (await CatalogItemApi.ListAllAsync(client)).Max(i => i.Id) + 1000;
+        var name = CatalogItemApi.UniqueName("update unknown");
+        var request = new
+        {
+            Id = unknownId,
+            CatalogBrandId = _testBrandId,
+            CatalogTypeId = _testTypeId,
+            Description = _updatedDescription,
+            Name = name,
+            Price = _updatedPrice
+        };
+
+        var response = await client.PutAsync("api/catalog-items", CatalogItemApi.Json(request));
 
         Assert.AreEqual(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.AreEqual(string.Empty, await response.Content.ReadAsStringAsync(), "A 404 should not return an item.");
+        Assert.IsFalse((await CatalogItemApi.ListAllAsync(client)).Any(i => i.Name == name), "Updating an unknown id must not create an item.");
+        Assert.IsNull(await CatalogItemApi.TryGetAsync(client, unknownId));
+    }
+
+    [TestMethod]
+    public async Task RejectsNonPositivePriceAndKeepsStoredItem()
+    {
+        var client = CatalogItemApi.AdminClient();
+        var item = await CatalogItemApi.CreateAsync(client, CatalogItemApi.UniqueName("bad price"), 3.21m);
+        var request = new
+        {
+            item.Id,
+            CatalogBrandId = _testBrandId,
+            CatalogTypeId = _testTypeId,
+            Description = "should not be stored",
+            Name = CatalogItemApi.UniqueName("bad price renamed"),
+            Price = 0m
+        };
+
+        var response = await client.PutAsync("api/catalog-items", CatalogItemApi.Json(request));
+
+        Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode, await response.Content.ReadAsStringAsync());
+        var stored = await CatalogItemApi.TryGetAsync(client, item.Id);
+        Assert.IsNotNull(stored);
+        Assert.AreEqual(item.Name, stored.Name, "A rejected update must not rename the item.");
+        Assert.AreEqual(3.21m, stored.Price, "A rejected update must not change the price.");
     }
 
     [TestMethod]

@@ -16,6 +16,10 @@ public class TestApplication : WebApplicationFactory<IBasketViewModelService>
 {
     private readonly string _environment = "Development";
 
+    // Unique per factory: EF Core shares in-memory stores by name across the process,
+    // so fixed names would leak data between test classes.
+    private readonly string _databaseSuffix = Guid.NewGuid().ToString("N");
+
     protected override IHost CreateHost(IHostBuilder builder)
     {
         builder.UseEnvironment(_environment);
@@ -37,7 +41,7 @@ public class TestApplication : WebApplicationFactory<IBasketViewModelService>
             {
                 // Replace SQLite with in-memory database for tests
                 return new DbContextOptionsBuilder<CatalogContext>()
-                .UseInMemoryDatabase("InMemoryDbForTesting")
+                .UseInMemoryDatabase($"InMemoryDbForTesting-{_databaseSuffix}")
                 .UseApplicationServiceProvider(sp)
                 .Options;
             });
@@ -45,7 +49,7 @@ public class TestApplication : WebApplicationFactory<IBasketViewModelService>
             {
                 // Replace SQLite with in-memory database for tests
                 return new DbContextOptionsBuilder<AppIdentityDbContext>()
-                .UseInMemoryDatabase("Identity")
+                .UseInMemoryDatabase($"Identity-{_databaseSuffix}")
                 .UseApplicationServiceProvider(sp)
                 .Options;
             });

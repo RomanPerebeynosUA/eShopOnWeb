@@ -1,9 +1,11 @@
 using System.Net;
 using System.Security.Cryptography;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.eShopWeb.ApplicationCore.Entities.OrderAggregate;
 using Microsoft.eShopWeb.ApplicationCore.Interfaces;
 using Microsoft.eShopWeb.Infrastructure.Identity;
+using Microsoft.eShopWeb.Web.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -17,7 +19,7 @@ public static class WebTestUsers
 {
     public const string DefaultPassword = "Pass@word1";
 
-    public static async Task<string> CreateUserAsync(TestApplication factory, string password = DefaultPassword)
+    public static async Task<string> CreateUserAsync(WebApplicationFactory<IBasketViewModelService> factory, string password = DefaultPassword)
     {
         var email = $"test-{Guid.NewGuid():N}@example.com";
         await WithUserManagerAsync(factory, async userManager =>
@@ -44,7 +46,7 @@ public static class WebTestUsers
         return response;
     }
 
-    public static async Task<string> CreateAndLoginAsync(TestApplication factory, HttpClient client)
+    public static async Task<string> CreateAndLoginAsync(WebApplicationFactory<IBasketViewModelService> factory, HttpClient client)
     {
         var email = await CreateUserAsync(factory);
         await LoginAsync(client, email);
@@ -75,13 +77,13 @@ public static class WebTestUsers
         return await client.PostAsync(url, new FormUrlEncodedContent(values));
     }
 
-    public static async Task WithUserManagerAsync(TestApplication factory, Func<UserManager<ApplicationUser>, Task> action)
+    public static async Task WithUserManagerAsync(WebApplicationFactory<IBasketViewModelService> factory, Func<UserManager<ApplicationUser>, Task> action)
     {
         using var scope = factory.Services.CreateScope();
         await action(scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>());
     }
 
-    public static async Task<T> WithUserManagerAsync<T>(TestApplication factory, Func<UserManager<ApplicationUser>, ApplicationUser, Task<T>> action, string email)
+    public static async Task<T> WithUserManagerAsync<T>(WebApplicationFactory<IBasketViewModelService> factory, Func<UserManager<ApplicationUser>, ApplicationUser, Task<T>> action, string email)
     {
         using var scope = factory.Services.CreateScope();
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
@@ -90,10 +92,10 @@ public static class WebTestUsers
         return await action(userManager, user!);
     }
 
-    public static Task<ApplicationUser> GetUserAsync(TestApplication factory, string email) =>
+    public static Task<ApplicationUser> GetUserAsync(WebApplicationFactory<IBasketViewModelService> factory, string email) =>
         WithUserManagerAsync(factory, (_, user) => Task.FromResult(user), email);
 
-    public static async Task<Order> CreateOrderAsync(TestApplication factory, string buyerEmail, string productName, decimal unitPrice, int units)
+    public static async Task<Order> CreateOrderAsync(WebApplicationFactory<IBasketViewModelService> factory, string buyerEmail, string productName, decimal unitPrice, int units)
     {
         using var scope = factory.Services.CreateScope();
         var repository = scope.ServiceProvider.GetRequiredService<IRepository<Order>>();
@@ -105,11 +107,13 @@ public static class WebTestUsers
     /// <summary>
     /// Computes the current RFC 6238 code for an authenticator key, matching ASP.NET Core Identity's
     /// AuthenticatorTokenProvider (HMAC-SHA1, 30 second steps, 6 digits, base32 key).
+    /// Identity accepts codes from neighbouring time steps, so a code computed just before a
+    /// step boundary is still valid when the request arrives. Pass <paramref name="at"/> to pin the time.
     /// </summary>
-    public static string ComputeTotp(string base32Key)
+    public static string ComputeTotp(string base32Key, DateTimeOffset? at = null)
     {
         var key = FromBase32(base32Key);
-        var timestep = (ulong)(DateTimeOffset.UtcNow.ToUnixTimeSeconds() / 30);
+        var timestep = (ulong)((at ?? DateTimeOffset.UtcNow).ToUnixTimeSeconds() / 30);
         var counter = BitConverter.GetBytes(timestep);
         if (BitConverter.IsLittleEndian)
         {

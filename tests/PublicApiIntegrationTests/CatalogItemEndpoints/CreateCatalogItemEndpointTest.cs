@@ -62,6 +62,46 @@ public class CreateCatalogItemEndpointTest
         Assert.AreEqual(_testPrice, model.CatalogItem.Price);
     }
 
+    [TestMethod]
+    public async Task ReturnsConflictGivenDuplicateNameAndStoresOnlyOneItem()
+    {
+        var client = CatalogItemApi.AdminClient();
+        var name = CatalogItemApi.UniqueName("duplicate");
+        await CatalogItemApi.CreateAsync(client, name);
+
+        var response = await client.PostAsync("api/catalog-items", CatalogItemApi.Json(CatalogItemApi.NewItem(name)));
+
+        Assert.AreEqual(HttpStatusCode.Conflict, response.StatusCode);
+        StringAssert.Contains(await response.Content.ReadAsStringAsync(), $"A catalogItem with name {name} already exists");
+        Assert.AreEqual(1, (await CatalogItemApi.ListAllAsync(client)).Count(i => i.Name == name), "The duplicate must not be stored.");
+    }
+
+    [TestMethod]
+    public async Task ReturnsBadRequestGivenMalformedJsonAndStoresNothing()
+    {
+        var client = CatalogItemApi.AdminClient();
+        var malformed = new StringContent("{\"name\": \"broken\", \"price\": ", Encoding.UTF8, "application/json");
+
+        var response = await client.PostAsync("api/catalog-items", malformed);
+
+        Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode, await response.Content.ReadAsStringAsync());
+        Assert.IsFalse((await CatalogItemApi.ListAllAsync(client)).Any(i => i.Name == "broken"), "A malformed request must not create an item.");
+    }
+
+    [TestMethod]
+    public async Task ReturnsBadRequestGivenEmptyNameAndStoresNothing()
+    {
+        var client = CatalogItemApi.AdminClient();
+        var description = CatalogItemApi.UniqueName("empty name");
+        var request = CatalogItemApi.NewItem(string.Empty);
+        request.Description = description;
+
+        var response = await client.PostAsync("api/catalog-items", CatalogItemApi.Json(request));
+
+        Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode, await response.Content.ReadAsStringAsync());
+        Assert.IsFalse((await CatalogItemApi.ListAllAsync(client)).Any(i => i.Description == description), "An invalid item must not be stored.");
+    }
+
     private StringContent GetValidNewItemJson(string? name = null)
     {
         var request = new CreateCatalogItemRequest()

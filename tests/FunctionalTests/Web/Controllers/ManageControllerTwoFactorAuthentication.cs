@@ -68,11 +68,15 @@ public class ManageControllerTwoFactorAuthentication : IClassFixture<TestApplica
     [Fact]
     public async Task Disable2faWarningFailsForUserWithout2fa()
     {
-        await WebTestUsers.CreateAndLoginAsync(_factory, Client);
+        var email = await WebTestUsers.CreateAndLoginAsync(_factory, Client);
 
         var response = await Client.GetAsync("/manage/disable2fa-warning");
 
         Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("Unexpected error occured disabling 2FA for user with ID", body);
+        Assert.DoesNotContain("action=\"/manage/disable2fa\"", body);
+        Assert.False(await WebTestUsers.WithUserManagerAsync(_factory, (um, user) => um.GetTwoFactorEnabledAsync(user), email));
     }
 
     [Fact]
