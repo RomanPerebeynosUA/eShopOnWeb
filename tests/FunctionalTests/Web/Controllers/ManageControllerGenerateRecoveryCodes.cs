@@ -38,11 +38,15 @@ public class ManageControllerGenerateRecoveryCodes : IClassFixture<TestApplicati
     [Fact]
     public async Task WarningPageFailsForUserWithout2fa()
     {
-        await WebTestUsers.CreateAndLoginAsync(_factory, Client);
+        var email = await WebTestUsers.CreateAndLoginAsync(_factory, Client);
 
         var response = await Client.GetAsync("/manage/generate-recovery-codes-warning");
 
         Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("because they do not have 2FA enabled", body);
+        Assert.DoesNotContain("action=\"/manage/generate-recovery-codes\"", body);
+        Assert.Equal(0, await WebTestUsers.WithUserManagerAsync(_factory, (um, user) => um.CountRecoveryCodesAsync(user), email));
     }
 
     [Fact]

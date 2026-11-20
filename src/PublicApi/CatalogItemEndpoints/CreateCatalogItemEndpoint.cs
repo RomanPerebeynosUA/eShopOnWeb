@@ -1,4 +1,5 @@
 ﻿using System.Threading.Tasks;
+using Ardalis.GuardClauses;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
@@ -39,6 +40,8 @@ public class CreateCatalogItemEndpoint : IEndpoint<IResult, CreateCatalogItemReq
     public async Task<IResult> HandleAsync(CreateCatalogItemRequest request, IRepository<CatalogItem> itemRepository)
     {
         var response = new CreateCatalogItemResponse(request.CorrelationId());
+
+        Guard.Against.NullOrWhiteSpace(request.Name, nameof(request.Name));
 
         var catalogItemNameSpecification = new CatalogItemNameSpecification(request.Name);
         var existingCataloogItem = await itemRepository.CountAsync(catalogItemNameSpecification);

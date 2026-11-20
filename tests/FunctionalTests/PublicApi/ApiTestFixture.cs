@@ -13,6 +13,9 @@ public class TestApiApplication : WebApplicationFactory<AuthenticateEndpoint>
 {
     private readonly string _environment = "Testing";
 
+    // Unique per factory so test classes do not share in-memory data.
+    private readonly string _databaseSuffix = Guid.NewGuid().ToString("N");
+
     protected override IHost CreateHost(IHostBuilder builder)
     {
         builder.UseEnvironment(_environment);
@@ -24,7 +27,7 @@ public class TestApiApplication : WebApplicationFactory<AuthenticateEndpoint>
             {
                 // Replace SQLite with in-memory database for tests
                 return new DbContextOptionsBuilder<CatalogContext>()
-                .UseInMemoryDatabase("DbForPublicApi")
+                .UseInMemoryDatabase($"DbForPublicApi-{_databaseSuffix}")
                 .UseApplicationServiceProvider(sp)
                 .Options;
             });
@@ -32,7 +35,7 @@ public class TestApiApplication : WebApplicationFactory<AuthenticateEndpoint>
             {
                 // Replace SQLite with in-memory database for tests
                 return new DbContextOptionsBuilder<AppIdentityDbContext>()
-                .UseInMemoryDatabase("IdentityDbForPublicApi")
+                .UseInMemoryDatabase($"IdentityDbForPublicApi-{_databaseSuffix}")
                 .UseApplicationServiceProvider(sp)
                 .Options;
             });
